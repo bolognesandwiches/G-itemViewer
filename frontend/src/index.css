@@ -1,0 +1,98 @@
+body, html {
+    margin: 0;
+    padding: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;
+}
+
+.window {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: grid;
+    grid-template-rows: 32px auto 16px;
+    grid-template-columns: 15px auto 17px;
+    background-color: transparent;
+}
+
+.window div {
+    background-size: contain;
+}
+
+.topleft, .top, .topright {
+    --wails-draggable: drag;
+}
+
+.left, .content, .right, .bottomleft, .bottom, .bottomright {
+    --wails-draggable: no-drag;
+}
+
+.topleft {
+    background: url('./assets/topleft.gif') no-repeat;
+    grid-row: 1 / 2;
+    grid-column: 1 / 2;
+}
+
+.top {
+    background: url('./assets/top.gif') repeat-x;
+    grid-row: 1 / 2;
+    grid-column: 2 / 3;
+}
+
+.topright {
+    background: url('./assets/topright.gif') no-repeat;
+    grid-row: 1 / 2;
+    grid-column: 3 / 4;
+}
+
+.left {
+    background: url('./assets/left.gif') repeat-y;
+    grid-row: 2 / 3;
+    grid-column: 1 / 2;
+}
+
+.content {
+    background: white;
+    grid-row: 2 / 3;
+    grid-column: 2 / 3;
+    padding: 20px;
+}
+
+.right {
+    background: url('./assets/right.gif') repeat-y;
+    grid-row: 2 / 3;
+    grid-column: 3 / 4;
+}
+
+.bottomleft {
+    background: url('./assets/bottomleft.gif') no-repeat;
+    grid-row: 3 / 4;
+    grid-column: 1 / 2;
+}
+
+.bottom {
+    background: url('./assets/bottom.gif') repeat-x;
+    grid-row: 3 / 4;
+    grid-column: 2 / 3;
+}
+
+.bottomright {
+    background: url('./assets/bottomright.gif') no-repeat;
+    grid-row: 3 / 4;
+    grid-column: 3 / 4;
+}
+
+.close {
+    width: 15px;
+    height: 15px;
+    background: url('./assets/close.gif') no-repeat;
+    position: absolute;
+    top: 5px;
+    right: 11px;
+    cursor: pointer;
+    z-index: 1000;
+    --wails-draggable: no-drag;
+}
