@@ -7,20 +7,30 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"log"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"syscall"
 	"time"
 	"unsafe"
 
+	"github.com/bolognesandwiches/G-itemViewer/trading"
+	"github.com/bolognesandwiches/G-itemViewer/ui"
 	"github.com/wailsapp/wails/v2"
 	"github.com/wailsapp/wails/v2/pkg/options"
 	"github.com/wailsapp/wails/v2/pkg/options/assetserver"
 	"github.com/wailsapp/wails/v2/pkg/runtime"
 	"golang.org/x/sys/windows"
+	g "xabbo.b7c.io/goearth"
+	"xabbo.b7c.io/goearth/shockwave/inventory"
+	"xabbo.b7c.io/goearth/shockwave/out"
+	"xabbo.b7c.io/goearth/shockwave/profile"
+	"xabbo.b7c.io/goearth/shockwave/room"
+	"xabbo.b7c.io/goearth/shockwave/trade"
 )
 
 const (
@@ -49,16 +59,39 @@ var (
 )
 
 type App struct {
-	ctx       context.Context
-	habboHWND syscall.Handle
+	ctx              context.Context
+	habboHWND        syscall.Handle
+	inventoryManager *inventory.Manager
+	roomManager      *room.Manager
+	profileManager   *profile.Manager
+	tradeManager     *trading.Manager
+	uiManager        *ui.UIManager
+	isCountingHand   bool
+	isCounted        map[int]bool
+	retrievedItems   map[int]inventory.Item
+	refreshed        bool
+	lock             sync.Mutex
+	unifiedInventory *ui.UnifiedInventory
 }
 
 func NewApp() *App {
-	return &App{}
+	return &App{
+		isCounted:      make(map[int]bool),
+		retrievedItems: make(map[int]inventory.Item),
+	}
 }
+
+var ext = g.NewExt(g.ExtInfo{
+	Title:       "G-itemViewer",
+	Description: "Inventory and Room Viewer with Pickup and Trading utility",
+	Version:     "1.0.0",
+	Author:      "madlad",
+})
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+	a.initializeGEarth()
+	a.uiManager = ui.NewUIManager(ctx, ext, a.inventoryManager, a.roomManager, a.profileManager, a.tradeManager, a.StartInventoryScanning)
 }
 
 func (a *App) Quit() {
@@ -67,6 +100,87 @@ func (a *App) Quit() {
 
 func intptr(n int) uintptr {
 	return uintptr(n)
+}
+
+func (a *App) initializeGEarth() {
+	a.inventoryManager = inventory.NewManager(ext)
+	a.roomManager = room.NewManager(ext)
+	a.profileManager = profile.NewManager(ext)
+	a.tradeManager = trading.NewManager(ext, a.profileManager, a.inventoryManager)
+
+	// Set up event handlers
+	a.setupEventHandlers()
+
+	// Start the G-Earth extension
+	go func() {
+		ext.RunE()
+	}()
+}
+
+func setupExt() {
+	ext.Initialized(func(e g.InitArgs) {
+		log.Printf("initialized (connected=%t)", e.Connected)
+	})
+
+	ext.Activated(func() {
+		log.Printf("activated")
+	})
+
+	ext.Connected(func(e g.ConnectArgs) {
+		log.Printf("connected (%s:%d)", e.Host, e.Port)
+		log.Printf("client %s (%s)", e.Client.Identifier, e.Client.Version)
+	})
+
+	ext.Disconnected(func() {
+		log.Printf("connection lost")
+	})
+}
+
+func (a *App) setupEventHandlers() {
+	ext.Connected(func(args g.ConnectArgs) {
+		// Handle connection
+	})
+
+	ext.Initialized(func(args g.InitArgs) {
+		// Handle initialization
+	})
+
+	ext.Activated(func() {
+		// Handle activation
+	})
+
+	ext.Disconnected(func() {
+		// Handle disconnection
+	})
+
+	a.inventoryManager.Updated(func() {
+		a.handleInventoryUpdate()
+	})
+
+	a.inventoryManager.ItemRemoved(func(args inventory.ItemArgs) {
+		a.handleItemRemoval(args.Item)
+	})
+
+	a.tradeManager.Updated(a.handleTradeUpdated)
+	a.tradeManager.Accepted(a.handleTradeAccepted)
+	a.tradeManager.Completed(a.handleTradeCompleted)
+	a.tradeManager.Closed(a.handleTradeClosed)
+
+	a.roomManager.ObjectAdded(func(args room.ObjectArgs) {
+		a.addItemToRoom(args.Object)
+	})
+
+	a.roomManager.ObjectRemoved(func(args room.ObjectArgs) {
+		a.removeItemFromRoom(args.Object.Id)
+	})
+
+	a.roomManager.ObjectsLoaded(func(args room.ObjectsArgs) {
+		a.updateRoomDisplay(a.roomManager.Objects, a.roomManager.Items)
+	})
+
+	a.roomManager.ItemsLoaded(func(args room.ItemsArgs) {
+		a.updateRoomDisplay(a.roomManager.Objects, a.roomManager.Items)
+	})
 }
 
 func (a *App) DownloadAndExtractZip(url string) (string, error) {
@@ -275,6 +389,9 @@ func (a *App) LaunchAndEmbedHabbo() string {
 func main() {
 	app := NewApp()
 
+	// Run the G-Earth extension in a separate goroutine
+	setupExt()
+
 	err := wails.Run(&options.App{
 		Title:  "Habbo Embed App",
 		Width:  1024,
@@ -350,7 +467,7 @@ func (a *App) DownloadAndLaunchHabbo() error {
 	}
 
 	// Wait a bit for Habbo to launch
-	time.Sleep(5 * time.Second)
+	time.Sleep(2 * time.Second)
 
 	// Find the Habbo window
 	habboHWND, err := FindWindowByProcess(cmd.Process.Pid)
@@ -481,4 +598,120 @@ func (a *App) UpdateHabboWindowPosition(habboHWND syscall.Handle) error {
 	runtime.LogInfo(a.ctx, fmt.Sprintf("Habbo window repositioned to (%d, %d)", x, y))
 
 	return nil
+}
+
+func (a *App) handleInventoryUpdate() {
+	// Update unified inventory
+	// Refresh UI
+}
+
+func (a *App) handleItemRemoval(item inventory.Item) {
+	// Remove item from unified inventory
+	// Refresh UI
+}
+
+func (a *App) handleTradeUpdated(args trade.Args) {
+	// Update trade UI
+}
+
+func (a *App) handleTradeAccepted(args trade.AcceptArgs) {
+	// Handle trade acceptance
+}
+
+func (a *App) handleTradeCompleted(args trade.Args) {
+	// Handle trade completion
+	// Update inventory
+}
+
+func (a *App) handleTradeClosed(args trade.Args) {
+	// Handle trade closure
+	// Reset trade UI
+}
+
+func (a *App) addItemToRoom(item room.Object) {
+	// Add item to room display
+}
+
+func (a *App) removeItemFromRoom(itemId int) {
+	// Remove item from room display
+}
+
+func (a *App) updateRoomDisplay(objects map[int]room.Object, items map[int]room.Item) {
+	// Update room display
+}
+
+func (a *App) ScanInventory() {
+	// Clear existing inventory
+	a.unifiedInventory = ui.NewUnifiedInventory()
+
+	// Trigger inventory scan
+	a.inventoryManager.Update()
+}
+
+func (a *App) CaptureRoom() string {
+	// Implement room capture logic
+	return "Room captured"
+}
+
+func (a *App) PickupItems(itemIds []int) string {
+	// Implement item pickup logic
+	return "Items picked up"
+}
+
+func (a *App) StartInventoryCount() {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	// Clear the maps
+	for k := range a.isCounted {
+		delete(a.isCounted, k)
+	}
+	for k := range a.retrievedItems {
+		delete(a.retrievedItems, k)
+	}
+
+	a.refreshed = false
+	a.isCountingHand = true
+	a.inventoryManager.Update()
+}
+
+func (a *App) TickCounter() {
+	a.lock.Lock()
+	defer a.lock.Unlock()
+
+	if !a.isCountingHand {
+		return
+	}
+
+	if !a.refreshed {
+		a.refreshed = true
+		a.inventoryManager.Update()
+		return
+	}
+
+	isDone := len(a.inventoryManager.Items()) == 0
+	for _, item := range a.inventoryManager.Items() {
+		if a.isCounted[item.ItemId] {
+			isDone = true
+			continue
+		}
+		a.retrievedItems[item.ItemId] = item
+		a.isCounted[item.ItemId] = true
+	}
+
+	if isDone {
+		a.uiManager.RefreshInventoryDisplay()
+		a.isCountingHand = false
+	} else {
+		ext.Send(out.GETSTRIP, []byte("next"))
+	}
+}
+
+func (a *App) StartInventoryScanning() {
+	a.StartInventoryCount()
+	go func() {
+		for range time.Tick(time.Millisecond * 550) {
+			a.TickCounter()
+		}
+	}()
 }

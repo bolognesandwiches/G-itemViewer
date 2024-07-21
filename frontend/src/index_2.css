@@ -14,8 +14,8 @@ body, html {
     width: 100%;
     height: 100%;
     display: grid;
-    grid-template-rows: 50px auto 50px;
-    grid-template-columns: 50px auto 50px;
+    grid-template-rows: 32px auto 16px;
+    grid-template-columns: 15px auto 17px;
     background-color: transparent;
 }
 
@@ -32,25 +32,25 @@ body, html {
 }
 
 .topleft {
-    background: url('./assets/yellow_big/topleft.png') no-repeat;
+    background: url('./assets/topleft.png') no-repeat;
     grid-row: 1 / 2;
     grid-column: 1 / 2;
 }
 
 .top {
-    background: url('./assets/yellow_big/top.png') repeat-x;
+    background: url('./assets/top.png') repeat-x;
     grid-row: 1 / 2;
     grid-column: 2 / 3;
 }
 
 .topright {
-    background: url('./assets/yellow_big/topright.png') no-repeat;
+    background: url('./assets/topright.png') no-repeat;
     grid-row: 1 / 2;
     grid-column: 3 / 4;
 }
 
 .left {
-    background: url('./assets/yellow_big/left.png') repeat-y;
+    background: url('./assets/left2.png') repeat-y;
     grid-row: 2 / 3;
     grid-column: 1 / 2;
 }
@@ -58,17 +58,16 @@ body, html {
 .content {
     background-image: repeating-linear-gradient(
         to bottom,
-        #2f4400 0px,
-        #2f4400 1px,
-        #395200 1px,
-        #395200 2px
+        #383838 0px,
+        #383838 1px,
+        #585858 1px,
+        #585858 2px
     );
     grid-row: 2 / 3;
     grid-column: 2 / 3;
     display: flex;
     overflow: hidden;
 }
-
 .main-content {
     flex: 1;
     padding: 10px;
@@ -95,25 +94,25 @@ body, html {
 }
 
 .right {
-    background: url('./assets/yellow_big/right.png') repeat-y;
+    background: url('./assets/right.png') repeat-y;
     grid-row: 2 / 3;
     grid-column: 3 / 4;
 }
 
 .bottomleft {
-    background: url('./assets/yellow_big/bottomleft.png') no-repeat;
+    background: url('./assets/bottomleft.png') no-repeat;
     grid-row: 3 / 4;
     grid-column: 1 / 2;
 }
 
 .bottom {
-    background: url('./assets/yellow_big/bottom.png') repeat-x;
+    background: url('./assets/bottom.png') repeat-x;
     grid-row: 3 / 4;
     grid-column: 2 / 3;
 }
 
 .bottomright {
-    background: url('./assets/yellow_big/bottomright.png') no-repeat;
+    background: url('./assets/bottomright.png') no-repeat;
     grid-row: 3 / 4;
     grid-column: 3 / 4;
 }
@@ -121,7 +120,7 @@ body, html {
 .close {
     width: 15px;
     height: 15px;
-    background: url('./assets/yellow_big/c_close.gif') no-repeat;
+    background: url('./assets/c_close.gif') no-repeat;
     position: absolute;
     top: 5px;
     right: 11px;
