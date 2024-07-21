@@ -18,25 +18,18 @@ document.querySelector('#app').innerHTML = `
                     <h3>Inventory</h3>
                     <button id="scanButton">Scan Inventory</button>
                     <div id="inventorySummary"></div>
+                </div>
+            </div>
+            <div class="side-window" id="inventoryIconsWindow">
+                <div class="window-content">
+                    <h3>Inventory Icons</h3>
                     <div id="inventoryIcons"></div>
+                </div>
+            </div>
+            <div class="side-window" id="itemDetailsWindow">
+                <div class="window-content">
+                    <h3>Item Details</h3>
                     <div id="itemDetails"></div>
-                </div>
-            </div>
-            <div class="side-window" id="roomToolsWindow">
-                <div class="window-content">
-                    <h3>Room Tools</h3>
-                    <button id="captureRoomButton">Capture Room</button>
-                    <div id="roomSummary"></div>
-                    <div id="roomIcons"></div>
-                </div>
-            </div>
-            <div class="side-window" id="tradeManagerWindow">
-                <div class="window-content">
-                    <h3>Trade Manager</h3>
-                    <div id="tradeSummary"></div>
-                    <div id="tradeOfferContainer"></div>
-                    <div id="otherOfferContainer"></div>
-                    <button id="acceptTradeButton">Accept Trade</button>
                 </div>
             </div>
         </div>
@@ -49,29 +42,20 @@ document.querySelector('#app').innerHTML = `
 </div>
 `;
 
+function log(message) {
+    console.log(message);
+    const logElement = document.getElementById('debugLog') || createDebugLogElement();
+    logElement.innerHTML += `<p>${message}</p>`;
+    logElement.scrollTop = logElement.scrollHeight;
+}
 
-
-// Close button functionality
-document.querySelector('.close').addEventListener('click', () => {
-    window.go.main.App.Quit();
-});
-
-// Launch and embed Habbo
-document.querySelector('#launchButton').addEventListener('click', async () => {
-    const statusDiv = document.querySelector('#status');
-    statusDiv.textContent = "Process started...";
-    try {
-        const result = await window.go.main.App.LaunchAndEmbedHabbo();
-        statusDiv.textContent = result;
-    } catch (error) {
-        statusDiv.textContent = "Error: " + error;
-    }
-});
-
-window.addEventListener('resize', () => {
-    window.go.main.App.HandleResize()
-        .catch(err => console.error('Error handling resize:', err));
-});
+function createDebugLogElement() {
+    const logElement = document.createElement('div');
+    logElement.id = 'debugLog';
+    logElement.style.cssText = 'position: fixed; bottom: 10px; left: 10px; width: 300px; height: 200px; background: rgba(0,0,0,0.7); color: white; overflow-y: auto; padding: 10px; font-family: monospace; font-size: 12px;';
+    document.body.appendChild(logElement);
+    return logElement;
+}
 
 // Initialize the main window elements
 const statusDiv = document.querySelector('#status');
@@ -97,22 +81,32 @@ const tradeOfferContainer = document.querySelector('#tradeOfferContainer');
 const otherOfferContainer = document.querySelector('#otherOfferContainer');
 const acceptTradeButton = document.querySelector('#acceptTradeButton');
 
+// Close button functionality
+document.querySelector('.close').addEventListener('click', () => {
+    window.go.main.App.Quit();
+});
+
 // Event listeners for buttons
 launchButton.addEventListener('click', launchAndEmbedHabbo);
 scanButton.addEventListener('click', startInventoryScanning);
-captureRoomButton.addEventListener('click', captureRoom);
-acceptTradeButton.addEventListener('click', acceptTrade);
-
-// Close button functionality
-document.querySelectorAll('.close').forEach(closeButton => {
-    closeButton.addEventListener('click', () => window.go.main.App.Quit());
-});
+captureRoomButton?.addEventListener('click', captureRoom);
+acceptTradeButton?.addEventListener('click', acceptTrade);
 
 // Event listeners for Wails runtime events
 window.runtime.EventsOn("inventorySummaryUpdated", updateInventorySummary);
+window.runtime.EventsOn("inventoryDetailedSummaryUpdated", updateDetailedInventorySummary);
 window.runtime.EventsOn("inventoryIconsUpdated", updateInventoryIcons);
+window.runtime.EventsOn("inventoryItemIDsUpdated", updateInventoryItemIDs);
+window.runtime.EventsOn("inventoryScanComplete", handleInventoryScanComplete);
+window.runtime.EventsOn("inventoryScanProgress", updateScanProgress);
 window.runtime.EventsOn("roomUpdate", updateRoomDisplay);
 window.runtime.EventsOn("tradeUpdate", updateTradeDisplay);
+window.runtime.EventsOn("inventoryItemUpdated", updateInventoryItem);
+
+window.addEventListener('resize', () => {
+    window.go.main.App.HandleResize()
+        .catch(err => console.error('Error handling resize:', err));
+});
 
 async function launchAndEmbedHabbo() {
     statusDiv.textContent = "Process started...";
@@ -125,12 +119,24 @@ async function launchAndEmbedHabbo() {
 }
 
 async function startInventoryScanning() {
+    log('Starting inventory scan...');
     scanButton.disabled = true;
     scanButton.textContent = "Scanning...";
-    await window.go.main.App.StartInventoryScanning();
+    inventorySummary.innerHTML = '<p>Scanning inventory...</p>';
+    inventoryIcons.innerHTML = '';
+    itemDetails.innerHTML = '';
+    try {
+        await window.go.main.App.StartInventoryScanning();
+        log('Inventory scan started successfully');
+    } catch (error) {
+        log(`Error starting inventory scan: ${error}`);
+        scanButton.disabled = false;
+        scanButton.textContent = "Scan Inventory";
+    }
 }
 
 function updateInventorySummary(summary) {
+    log(`Received inventory summary: ${JSON.stringify(summary)}`);
     inventorySummary.innerHTML = `
         <h3>Inventory Summary</h3>
         <p>Total unique items: ${summary.TotalUniqueItems}</p>
@@ -139,15 +145,23 @@ function updateInventorySummary(summary) {
     `;
 }
 
+function updateDetailedInventorySummary(detailedSummary) {
+    log(`Received detailed inventory summary`);
+    inventorySummary.innerHTML += `<pre>${detailedSummary}</pre>`;
+}
+
 function updateInventoryIcons(groupedItems) {
+    log(`Received inventory icons: ${Object.keys(groupedItems).length} groups`);
     inventoryIcons.innerHTML = '';
-    for (const [groupKey, items] of Object.entries(groupedItems)) {
-        const item = items[0];
+    for (const [groupKey, item] of Object.entries(groupedItems)) {
         const icon = createInventoryIcon(item);
         inventoryIcons.appendChild(icon);
     }
-    scanButton.disabled = false;
-    scanButton.textContent = "Scan Inventory";
+}
+
+function updateInventoryItemIDs(itemIDs) {
+    log(`Received inventory item IDs`);
+    itemDetails.innerHTML = `<pre>${itemIDs}</pre>`;
 }
 
 function createInventoryIcon(item) {
@@ -156,34 +170,54 @@ function createInventoryIcon(item) {
     icon.style.backgroundImage = `url(${item.EnrichedItem.IconURL})`;
     icon.title = `${item.EnrichedItem.Name} (${item.Quantity})`;
     icon.onclick = () => displayItemDetails(item);
+    
+    const quantityLabel = document.createElement('span');
+    quantityLabel.className = 'quantity-label';
+    quantityLabel.textContent = item.Quantity;
+    icon.appendChild(quantityLabel);
+    
     return icon;
 }
 
 function displayItemDetails(item) {
+    let itemIDs = item.Items.map(i => i.ItemId).join('\n');
     itemDetails.innerHTML = `
         <h3>${item.EnrichedItem.Name}</h3>
         <p>Quantity: ${item.Quantity}</p>
-        <p>HC Value: ${item.EnrichedItem.HCValue.toFixed(2)}</p>
-        <p>Item ID: ${item.Item.ItemId}</p>
+        <p>HC Value: ${(item.EnrichedItem.HCValue * item.Quantity).toFixed(2)}</p>
+        <p>Item IDs:</p>
+        <pre>${itemIDs}</pre>
     `;
+}
+
+function handleInventoryScanComplete() {
+    log('Received inventoryScanComplete event');
+    scanButton.disabled = false;
+    scanButton.textContent = "Scan Inventory";
+}
+
+function updateScanProgress(itemCount) {
+    log(`Scan progress: ${itemCount} items scanned`);
 }
 
 async function captureRoom() {
-    await window.go.main.UIManager.CaptureRoom();
+    await window.go.main.App.CaptureRoom();
 }
 
 function updateRoomDisplay(objects, items) {
-    roomSummary.innerHTML = `
-        <h3>Room Summary</h3>
-        <p>Floor items: ${objects.length}</p>
-        <p>Wall items: ${items.length}</p>
-    `;
+    if (roomSummary && roomIcons) {
+        roomSummary.innerHTML = `
+            <h3>Room Summary</h3>
+            <p>Floor items: ${objects.length}</p>
+            <p>Wall items: ${items.length}</p>
+        `;
 
-    roomIcons.innerHTML = '';
-    [...objects, ...items].forEach(item => {
-        const icon = createRoomIcon(item);
-        roomIcons.appendChild(icon);
-    });
+        roomIcons.innerHTML = '';
+        [...objects, ...items].forEach(item => {
+            const icon = createRoomIcon(item);
+            roomIcons.appendChild(icon);
+        });
+    }
 }
 
 function createRoomIcon(item) {
@@ -191,23 +225,25 @@ function createRoomIcon(item) {
     icon.className = 'room-icon';
     icon.style.backgroundImage = `url(${item.IconURL})`;
     icon.title = item.Name;
-    icon.onclick = () => window.go.main.UIManager.PickupItems([item.Id]);
+    icon.onclick = () => window.go.main.App.PickupItems([item.Id]);
     return icon;
 }
 
 async function acceptTrade() {
-    await window.go.main.UIManager.AcceptTrade();
+    await window.go.main.App.AcceptTrade();
 }
 
 function updateTradeDisplay(offers) {
-    tradeSummary.innerHTML = `
-        <h3>Trade Summary</h3>
-        <p>Your offer: ${offers.Trader.Items.length} items</p>
-        <p>Their offer: ${offers.Tradee.Items.length} items</p>
-    `;
+    if (tradeSummary && tradeOfferContainer && otherOfferContainer) {
+        tradeSummary.innerHTML = `
+            <h3>Trade Summary</h3>
+            <p>Your offer: ${offers.Trader.Items.length} items</p>
+            <p>Their offer: ${offers.Tradee.Items.length} items</p>
+        `;
 
-    updateOfferContainer(tradeOfferContainer, offers.Trader.Items);
-    updateOfferContainer(otherOfferContainer, offers.Tradee.Items);
+        updateOfferContainer(tradeOfferContainer, offers.Trader.Items);
+        updateOfferContainer(otherOfferContainer, offers.Tradee.Items);
+    }
 }
 
 function updateOfferContainer(container, items) {
@@ -226,7 +262,63 @@ function createTradeIcon(item) {
     return icon;
 }
 
-window.addEventListener('resize', () => {
-    window.go.main.App.HandleResize()
-        .catch(err => console.error('Error handling resize:', err));
+function updateInventoryItem(data) {
+    updateInventorySummary(data.summary);
+    updateInventoryIcons(data.groupedItems);
+    highlightUpdatedItem(data.updatedItem, data.isAddition);
+}
+
+function highlightUpdatedItem(item, isAddition) {
+    const icons = document.querySelectorAll('.inventory-icon');
+    for (const icon of icons) {
+        if (icon.title.includes(item.EnrichedItem.Name)) {
+            icon.classList.add(isAddition ? 'highlight-add' : 'highlight-remove');
+            setTimeout(() => {
+                icon.classList.remove('highlight-add', 'highlight-remove');
+            }, 2000);
+            break;
+        }
+    }
+}
+
+// Add this CSS to your stylesheet
+const style = document.createElement('style');
+style.textContent = `
+.highlight-add {
+    animation: pulse-green 2s;
+}
+
+.highlight-remove {
+    animation: pulse-red 2s;
+}
+
+@keyframes pulse-green {
+    0% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(0, 255, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(0, 255, 0, 0); }
+}
+
+@keyframes pulse-red {
+    0% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0.7); }
+    70% { box-shadow: 0 0 0 10px rgba(255, 0, 0, 0); }
+    100% { box-shadow: 0 0 0 0 rgba(255, 0, 0, 0); }
+}
+`;
+document.head.appendChild(style);
+
+// Add event listeners for item placement and pickup
+document.querySelectorAll('.place-item').forEach(button => {
+    button.addEventListener('click', () => {
+        const itemId = button.getAttribute('data-item-id');
+        const x = parseInt(button.getAttribute('data-x'));
+        const y = parseInt(button.getAttribute('data-y'));
+        window.go.main.App.PlaceItem(itemId, x, y);
+    });
+});
+
+document.querySelectorAll('.pickup-item').forEach(button => {
+    button.addEventListener('click', () => {
+        const itemId = button.getAttribute('data-item-id');
+        window.go.main.App.PickupItems([itemId]);
+    });
 });

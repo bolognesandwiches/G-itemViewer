@@ -18,6 +18,7 @@ import (
 	"time"
 	"unsafe"
 
+	"github.com/bolognesandwiches/G-itemViewer/common"
 	"github.com/bolognesandwiches/G-itemViewer/trading"
 	"github.com/bolognesandwiches/G-itemViewer/ui"
 	"github.com/wailsapp/wails/v2"
@@ -66,30 +67,45 @@ type App struct {
 	profileManager   *profile.Manager
 	tradeManager     *trading.Manager
 	uiManager        *ui.UIManager
-	isCountingHand   bool
-	isCounted        map[int]bool
-	retrievedItems   map[int]inventory.Item
-	refreshed        bool
-	lock             sync.Mutex
 	unifiedInventory *ui.UnifiedInventory
+	lock             sync.Mutex
 }
 
 func NewApp() *App {
 	return &App{
-		isCounted:      make(map[int]bool),
-		retrievedItems: make(map[int]inventory.Item),
+		inventoryManager: inventory.NewManager(ext),
+		unifiedInventory: ui.NewUnifiedInventory(),
 	}
 }
 
-var ext = g.NewExt(g.ExtInfo{
-	Title:       "G-itemViewer",
-	Description: "Inventory and Room Viewer with Pickup and Trading utility",
-	Version:     "1.0.0",
-	Author:      "madlad",
-})
+var ext *g.Ext
+
+func init() {
+	ext = g.NewExt(g.ExtInfo{
+		Title:       "G-itemViewer",
+		Description: "Inventory and Room Viewer with Pickup and Trading utility",
+		Version:     "1.0.0",
+		Author:      "madlad",
+	})
+}
 
 func (a *App) startup(ctx context.Context) {
 	a.ctx = ctx
+
+	// Initialize common package
+	err := common.LoadFurniData("")
+	if err != nil {
+		runtime.LogError(ctx, "Failed to load furni data: "+err.Error())
+	}
+	err = common.LoadExternalTexts("")
+	if err != nil {
+		runtime.LogError(ctx, "Failed to load external texts: "+err.Error())
+	}
+	err = common.LoadAPIItems()
+	if err != nil {
+		runtime.LogError(ctx, "Failed to load API items: "+err.Error())
+	}
+
 	a.initializeGEarth()
 	a.uiManager = ui.NewUIManager(ctx, ext, a.inventoryManager, a.roomManager, a.profileManager, a.tradeManager, a.StartInventoryScanning)
 }
@@ -109,6 +125,7 @@ func (a *App) initializeGEarth() {
 	a.tradeManager = trading.NewManager(ext, a.profileManager, a.inventoryManager)
 
 	// Set up event handlers
+
 	a.setupEventHandlers()
 
 	// Start the G-Earth extension
@@ -154,7 +171,7 @@ func (a *App) setupEventHandlers() {
 	})
 
 	a.inventoryManager.Updated(func() {
-		a.handleInventoryUpdate()
+		a.HandleInventoryUpdate()
 	})
 
 	a.inventoryManager.ItemRemoved(func(args inventory.ItemArgs) {
@@ -386,33 +403,6 @@ func (a *App) LaunchAndEmbedHabbo() string {
 	return "Habbo launched and embedded successfully. Check the application window."
 }
 
-func main() {
-	app := NewApp()
-
-	// Run the G-Earth extension in a separate goroutine
-	setupExt()
-
-	err := wails.Run(&options.App{
-		Title:  "Habbo Embed App",
-		Width:  1024,
-		Height: 768,
-		AssetServer: &assetserver.Options{
-			Assets: assets,
-		},
-		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
-		Frameless:        true,
-		OnStartup:        app.startup,
-
-		Bind: []interface{}{
-			app,
-		},
-	})
-
-	if err != nil {
-		println("Error:", err.Error())
-	}
-}
-
 func (a *App) HandleResize() {
 	if a.habboHWND != 0 {
 		err := a.UpdateHabboWindowPosition(a.habboHWND)
@@ -501,6 +491,7 @@ func FindWindowByProcess(pid int) (syscall.Handle, error) {
 	}
 	return hwnd, nil
 }
+
 func FindWailsWindow(title string) (syscall.Handle, error) {
 	var hwnd syscall.Handle
 	cb := syscall.NewCallback(func(h syscall.Handle, param uintptr) uintptr {
@@ -600,9 +591,41 @@ func (a *App) UpdateHabboWindowPosition(habboHWND syscall.Handle) error {
 	return nil
 }
 
-func (a *App) handleInventoryUpdate() {
-	// Update unified inventory
-	// Refresh UI
+func (a *App) HandleInventoryUpdate() {
+	runtime.LogInfo(a.ctx, "HandleInventoryUpdate called")
+	items := a.inventoryManager.Items()
+	runtime.LogInfof(a.ctx, "Received %d items", len(items))
+
+	isDone := true
+	for _, item := range items {
+		if !a.unifiedInventory.ItemExists(item.ItemId) {
+			isDone = false
+			a.unifiedInventory.AddItem(item)
+		}
+	}
+
+	if isDone {
+		a.UpdateInventoryDisplay()
+		runtime.EventsEmit(a.ctx, "inventoryScanComplete")
+	} else {
+		go func() {
+			time.Sleep(550 * time.Millisecond)
+			runtime.LogInfo(a.ctx, "Requesting next batch of items")
+			ext.Send(out.GETSTRIP, []byte("next"))
+		}()
+	}
+}
+
+func (a *App) UpdateInventoryDisplay() {
+	runtime.LogInfo(a.ctx, "UpdateInventoryDisplay called")
+	summary := a.unifiedInventory.GetSummary()
+	groupedItems := a.unifiedInventory.GetGroupedItems()
+
+	runtime.LogInfof(a.ctx, "Emitting inventorySummaryUpdated event: %+v", summary)
+	runtime.EventsEmit(a.ctx, "inventorySummaryUpdated", summary)
+
+	runtime.LogInfof(a.ctx, "Emitting inventoryIconsUpdated event with %d groups", len(groupedItems))
+	runtime.EventsEmit(a.ctx, "inventoryIconsUpdated", groupedItems)
 }
 
 func (a *App) handleItemRemoval(item inventory.Item) {
@@ -640,78 +663,74 @@ func (a *App) updateRoomDisplay(objects map[int]room.Object, items map[int]room.
 	// Update room display
 }
 
-func (a *App) ScanInventory() {
+func (a *App) StartInventoryScanning() {
+	runtime.LogInfo(a.ctx, "StartInventoryScanning called")
+	if a.inventoryManager == nil {
+		runtime.LogError(a.ctx, "inventoryManager is nil")
+		return
+	}
 	// Clear existing inventory
 	a.unifiedInventory = ui.NewUnifiedInventory()
 
 	// Trigger inventory scan
 	a.inventoryManager.Update()
+	runtime.LogInfo(a.ctx, "Inventory update triggered")
 }
-
 func (a *App) CaptureRoom() string {
 	// Implement room capture logic
 	return "Room captured"
 }
 
-func (a *App) PickupItems(itemIds []int) string {
-	// Implement item pickup logic
-	return "Items picked up"
-}
+func (a *App) PickupItems(itemIds []int) {
+	for _, id := range itemIds {
+		ext.Send(out.ADDSTRIPITEM, []byte(fmt.Sprintf("new stuff %d", id)))
 
-func (a *App) StartInventoryCount() {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-
-	// Clear the maps
-	for k := range a.isCounted {
-		delete(a.isCounted, k)
-	}
-	for k := range a.retrievedItems {
-		delete(a.retrievedItems, k)
-	}
-
-	a.refreshed = false
-	a.isCountingHand = true
-	a.inventoryManager.Update()
-}
-
-func (a *App) TickCounter() {
-	a.lock.Lock()
-	defer a.lock.Unlock()
-
-	if !a.isCountingHand {
-		return
-	}
-
-	if !a.refreshed {
-		a.refreshed = true
-		a.inventoryManager.Update()
-		return
-	}
-
-	isDone := len(a.inventoryManager.Items()) == 0
-	for _, item := range a.inventoryManager.Items() {
-		if a.isCounted[item.ItemId] {
-			isDone = true
-			continue
+		var item inventory.Item
+		if obj, exists := a.roomManager.Objects[id]; exists {
+			item = inventory.Item{ItemId: id, Class: obj.Class, Type: "S"}
+		} else if roomItem, exists := a.roomManager.Items[id]; exists {
+			item = inventory.Item{ItemId: id, Class: roomItem.Class, Type: "I", Props: roomItem.Type}
+		} else {
+			continue // Skip if item not found
 		}
-		a.retrievedItems[item.ItemId] = item
-		a.isCounted[item.ItemId] = true
-	}
 
-	if isDone {
-		a.uiManager.RefreshInventoryDisplay()
-		a.isCountingHand = false
+		a.uiManager.HandleItemAddition(item)
+		runtime.LogInfof(a.ctx, "Item picked up: %+v", item)
+	}
+}
+
+func (a *App) PlaceItem(itemId int, x, y int) {
+	ext.Send(out.PLACESTUFF, []byte(fmt.Sprintf("%d %d %d", itemId, x, y)))
+
+	item, found := a.uiManager.FindItemById(itemId)
+	if found {
+		a.uiManager.HandleItemRemoval(item.ItemId)
+		runtime.LogInfof(a.ctx, "Item placed: %+v", item)
 	} else {
-		ext.Send(out.GETSTRIP, []byte("next"))
+		runtime.LogErrorf(a.ctx, "Failed to find item with ID: %d", itemId)
 	}
 }
 
-func (a *App) StartInventoryScanning() {
-	a.StartInventoryCount()
-	go func() {
-		for range time.Tick(time.Millisecond * 550) {
-			a.TickCounter()
-		}
-	}()
+func main() {
+	app := NewApp()
+
+	err := wails.Run(&options.App{
+		Title:     "Habbo Embed App",
+		Width:     1024,
+		Height:    768,
+		Frameless: true,
+		AssetServer: &assetserver.Options{
+			Assets: assets,
+		},
+		BackgroundColour: &options.RGBA{R: 255, G: 255, B: 255, A: 0},
+		OnStartup:        app.startup,
+		Bind: []interface{}{
+			app,
+		},
+	})
+
+	if err != nil {
+		println("Error:", err.Error())
+	}
+
 }

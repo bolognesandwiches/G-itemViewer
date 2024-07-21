@@ -1,3 +1,4 @@
+/* main-window.css */
 body, html {
     margin: 0;
     padding: 0;
@@ -7,7 +8,7 @@ body, html {
     font-family: Arial, sans-serif;
 }
 
-.window {
+.main-window {
     position: absolute;
     top: 0;
     left: 0;
@@ -19,43 +20,50 @@ body, html {
     background-color: transparent;
 }
 
-.window div {
+.main-window div {
     background-size: contain;
 }
 
-.topleft, .top, .topright {
+.main-window .topleft,
+.main-window .top,
+.main-window .topright {
     --wails-draggable: drag;
 }
 
-.left, .content, .right, .bottomleft, .bottom, .bottomright {
+.main-window .left,
+.main-window .content,
+.main-window .right,
+.main-window .bottomleft,
+.main-window .bottom,
+.main-window .bottomright {
     --wails-draggable: no-drag;
 }
 
-.topleft {
+.main-window .topleft {
     background: url('./assets/yellow_big/topleft.png') no-repeat;
     grid-row: 1 / 2;
     grid-column: 1 / 2;
 }
 
-.top {
+.main-window .top {
     background: url('./assets/yellow_big/top.png') repeat-x;
     grid-row: 1 / 2;
     grid-column: 2 / 3;
 }
 
-.topright {
+.main-window .topright {
     background: url('./assets/yellow_big/topright.png') no-repeat;
     grid-row: 1 / 2;
     grid-column: 3 / 4;
 }
 
-.left {
+.main-window .left {
     background: url('./assets/yellow_big/left.png') repeat-y;
     grid-row: 2 / 3;
     grid-column: 1 / 2;
 }
 
-.content {
+.main-window .content {
     background-image: repeating-linear-gradient(
         to bottom,
         #2f4400 0px,
@@ -69,56 +77,37 @@ body, html {
     overflow: hidden;
 }
 
-.main-content {
+.main-window .main-content {
     flex: 1;
     padding: 10px;
     overflow-y: auto;
 }
 
-.side-windows {
-    width: 300px;
-    display: flex;
-    flex-direction: column;
-}
-
-.side-window {
-    flex: 1;
-    border: 1px solid #ccc;
-    margin: 5px;
-    overflow: hidden;
-}
-
-.window-content {
-    height: 100%;
-    padding: 10px;
-    overflow-y: auto;
-}
-
-.right {
+.main-window .right {
     background: url('./assets/yellow_big/right.png') repeat-y;
     grid-row: 2 / 3;
     grid-column: 3 / 4;
 }
 
-.bottomleft {
+.main-window .bottomleft {
     background: url('./assets/yellow_big/bottomleft.png') no-repeat;
     grid-row: 3 / 4;
     grid-column: 1 / 2;
 }
 
-.bottom {
+.main-window .bottom {
     background: url('./assets/yellow_big/bottom.png') repeat-x;
     grid-row: 3 / 4;
     grid-column: 2 / 3;
 }
 
-.bottomright {
+.main-window .bottomright {
     background: url('./assets/yellow_big/bottomright.png') no-repeat;
     grid-row: 3 / 4;
     grid-column: 3 / 4;
 }
 
-.close {
+.main-window .close {
     width: 15px;
     height: 15px;
     background: url('./assets/yellow_big/c_close.gif') no-repeat;
@@ -130,7 +119,7 @@ body, html {
     --wails-draggable: no-drag;
 }
 
-button {
+.main-window button {
     margin: 5px 0;
     padding: 5px 10px;
     background-color: #4CAF50;
@@ -139,51 +128,50 @@ button {
     cursor: pointer;
 }
 
-button:disabled {
+.main-window button:disabled {
     background-color: #cccccc;
     cursor: not-allowed;
 }
 
-#status {
+.main-window #status {
     margin-top: 10px;
 }
 
-#habboContainer {
+.main-window #habboContainer {
     margin-top: 10px;
-    height: calc(100% - 80px);  /* Adjust based on your needs */
+    height: calc(100% - 80px);
 }
 
-.inventory-icons, .room-icons, .trade-offer {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 5px;
-    margin-top: 10px;
+.main-window .button-container {
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    z-index: 10;
 }
 
-.inventory-icon, .room-icon, .trade-icon {
-    width: 40px;
-    height: 40px;
-    background-size: contain;
-    background-repeat: no-repeat;
+.main-window .main-content {
+    flex: 1;
+    padding: 50px 10px 10px 10px; /* Increased top padding to make room for buttons */
+    overflow-y: auto;
+}
+
+/* Add this to your main-window.css */
+.main-window .button-container button {
+    display: block;
+    margin-bottom: 5px;
+    padding: 5px 10px;
+    background-color: #4CAF50;
+    color: white;
+    border: none;
     cursor: pointer;
+    border-radius: 3px;
 }
 
-#itemDetails {
-    margin-top: 10px;
-    padding: 10px;
-    background-color: #f0f0f0;
-    border-radius: 5px;
+.main-window .button-container button:hover {
+    background-color: #45a049;
 }
 
-#tradeSummary {
-    margin-bottom: 10px;
-}
-
-.trade-offers {
-    display: flex;
-    justify-content: space-between;
-}
-
-#tradeOfferContainer, #otherOfferContainer {
-    width: 48%;
+.main-window .button-container button:disabled {
+    background-color: #cccccc;
+    cursor: not-allowed;
 }

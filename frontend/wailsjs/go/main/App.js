@@ -18,6 +18,10 @@ export function EmbedHabboWindow(arg1) {
   return window['go']['main']['App']['EmbedHabboWindow'](arg1);
 }
 
+export function HandleInventoryUpdate() {
+  return window['go']['main']['App']['HandleInventoryUpdate']();
+}
+
 export function HandleResize() {
   return window['go']['main']['App']['HandleResize']();
 }
@@ -38,6 +42,10 @@ export function PickupItems(arg1) {
   return window['go']['main']['App']['PickupItems'](arg1);
 }
 
+export function PlaceItem(arg1, arg2, arg3) {
+  return window['go']['main']['App']['PlaceItem'](arg1, arg2, arg3);
+}
+
 export function Quit() {
   return window['go']['main']['App']['Quit']();
 }
@@ -46,24 +54,16 @@ export function RunExecutable(arg1) {
   return window['go']['main']['App']['RunExecutable'](arg1);
 }
 
-export function ScanInventory() {
-  return window['go']['main']['App']['ScanInventory']();
-}
-
-export function StartInventoryCount() {
-  return window['go']['main']['App']['StartInventoryCount']();
-}
-
 export function StartInventoryScanning() {
   return window['go']['main']['App']['StartInventoryScanning']();
 }
 
-export function TickCounter() {
-  return window['go']['main']['App']['TickCounter']();
-}
-
 export function UpdateHabboWindowPosition(arg1) {
   return window['go']['main']['App']['UpdateHabboWindowPosition'](arg1);
+}
+
+export function UpdateInventoryDisplay() {
+  return window['go']['main']['App']['UpdateInventoryDisplay']();
 }
 
 export function WaitForHabboWindow() {

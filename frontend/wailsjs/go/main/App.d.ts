@@ -10,6 +10,8 @@ export function DownloadAndLaunchHabbo():Promise<void>;
 
 export function EmbedHabboWindow(arg1:syscall.Handle):Promise<void>;
 
+export function HandleInventoryUpdate():Promise<void>;
+
 export function HandleResize():Promise<void>;
 
 export function LaunchAndEmbedHabbo():Promise<string>;
@@ -18,20 +20,18 @@ export function LaunchHabbo():Promise<void>;
 
 export function OnResize(arg1:number,arg2:number):Promise<void>;
 
-export function PickupItems(arg1:Array<number>):Promise<string>;
+export function PickupItems(arg1:Array<number>):Promise<void>;
+
+export function PlaceItem(arg1:number,arg2:number,arg3:number):Promise<void>;
 
 export function Quit():Promise<void>;
 
 export function RunExecutable(arg1:string):Promise<void>;
 
-export function ScanInventory():Promise<void>;
-
-export function StartInventoryCount():Promise<void>;
-
 export function StartInventoryScanning():Promise<void>;
 
-export function TickCounter():Promise<void>;
-
 export function UpdateHabboWindowPosition(arg1:syscall.Handle):Promise<void>;
+
+export function UpdateInventoryDisplay():Promise<void>;
 
 export function WaitForHabboWindow():Promise<void>;
